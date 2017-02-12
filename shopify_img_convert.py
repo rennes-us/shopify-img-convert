@@ -49,17 +49,16 @@ def get_products():
 def is_png(url):
     return requests.head(url).headers['content-type'] == 'image/png'
 
-def convert_png_to_jpg(png, jpg):
-    pass
-
 # example: ID 7694337025 (Base Range Buckle Ankle Socks Nude)
 def convert_images_for_product(product):
     """Given a product object or id number, convert all images into JPGs."""
     try:
         images = product.images
+        product_id = product.id
     except AttributeError:
         # This can't possibly be the right way to get the product object, can it?
-        product = shopify.Product(shopify.Product.get(product))
+        product_id = product
+        product = shopify.Product(shopify.Product.get(product_id))
         images = product.images
     # TODO: pipe the image data through imagemagick's convert tool to change to
     # JPG, and read in and encode in the attachment entry of a new Image
@@ -88,7 +87,6 @@ def convert_images_for_product(product):
                 f.write(r.content)
 
         # create new image file
-        log = StringIO.StringIO()
         path_png = os.path.join(str(product_id), filename_png)
         path_jpg = os.path.join(str(product_id), filename_jpg)
         cmd = ['convert', path_png, '-quality', '85%', path_jpg]

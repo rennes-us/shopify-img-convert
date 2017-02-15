@@ -7,23 +7,18 @@ Requires the requests and ShopifyAPI library."""
 # https://help.shopify.com/api/getting-started/authentication/private-authentication
 # https://help.shopify.com/api/reference/product
 # https://help.shopify.com/api/reference/product_image
+# https://github.com/Shopify/shopify_python_api
 
 from __future__ import print_function
 import sys
 import os
 import os.path
-import base64
-import StringIO
 import subprocess
-import shopify # https://github.com/Shopify/shopify_python_api
+import shopify
 try:
     from ConfigParser import SafeConfigParser # Python 2
 except ImportError:
     from configparser import SafeConfigParser # Python 3
-try:
-    from urllib2 import urlopen # Python 2
-except ImportError:
-    from urllib.request import urlopen # Python 3
 import requests
 
 CONFIG = SafeConfigParser()
@@ -52,9 +47,11 @@ def is_png(url):
 # example: ID 7694337025 (Base Range Buckle Ankle Socks Nude)
 def convert_images_for_product(product):
     """Given a product object or id number, convert all images into JPGs."""
+    # A product object was given
     try:
         images = product.images
         product_id = product.id
+    # A product ID was given
     except AttributeError:
         # This can't possibly be the right way to get the product object, can it?
         product_id = product
@@ -94,12 +91,34 @@ def convert_images_for_product(product):
         output = subprocess.check_output(cmd)
         sys.stderr.write('%s\n' % output)
 
-        # read in the new image data
+        # read in the new image data and attach to image object
+
         with open(path_jpg) as f:
             jpg_data = f.read()
         if jpg_data[0:2] != '\xff\xd8':
             raise Exception('JPEG prefix not found when loading %s' % path_jpg)
-        #print(base64.b64encode(data))
+
+        # Careful, now.  If I do this, the image will have the right content
+        # but the content-type delivered by Shopify will still be image/png.
+        # The safer way looks to be to create a new image object and add that
+        # to the product's list of images.
+        #image.attach_image(data=jpg_data, filename=os.path.basename(path_jpg))
+        #image.save()
+
+        # So, safely add a new image.
+        attrs = {}
+        attrs.update(image.attributes)
+        del attrs['id']
+        del attrs['src']
+        image_new = shopify.Image(attributes=attrs)
+        image_new.attach_image(data=jpg_data, filename=os.path.basename(path_jpg))
+        pos = attrs['position'] - 1
+        # replace image
+        del product.images[pos]
+        product.images.insert(pos, image_new)
+
+    # Apparently save() actually sends the updated data to the server.
+    product.save()
 
 def main(args):
     auth()

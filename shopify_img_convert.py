@@ -22,10 +22,13 @@ import requests
 
 CONFIG = SafeConfigParser()
 CONFIG.read('shopify_img_convert.ini')
-CONFIG_AUTH = dict(CONFIG.items('auth'))
+CONFIG_MAIN = dict(CONFIG.items('main'))
 
-def auth():
-    shop_url = "https://%s:%s@%s/admin" % (CONFIG_AUTH['api_key'], CONFIG_AUTH['password'], CONFIG_AUTH['store'])
+def auth(store=None, api_key=None, password=None):
+    store = store or CONFIG_MAIN['store']
+    api_key = api_key or CONFIG_MAIN['api_key']
+    password = password or CONFIG_MAIN['password']
+    shop_url = "https://%s:%s@%s/admin" % (api_key, password, store)
     shopify.ShopifyResource.set_site(shop_url)
 
 def get_products():
@@ -43,20 +46,24 @@ def get_products():
 def is_png(url):
     return requests.head(url).headers['content-type'] == 'image/png'
 
-def convert_images_for_product(product):
+def convert_images_for_product(product, path="."):
     """Given a product object or id number, convert all PNGs into JPGs."""
     # A product object was given
     try:
-        images = product.images
         product_id = product.id
     # A product ID was given
     except AttributeError:
         product_id = product
         product = shopify.Product(shopify.Product.get(product_id))
-        images = product.images
+    # we need a shallow copy to iterate over below (so when we edit
+    # product.images we're not also editing this list while in the loop.)
+    images = [i for i in product.images]
 
-    if not os.path.isdir(str(product_id)):
-        os.mkdir(str(product_id))
+    if not os.path.isdir(path):
+        os.mkdir(path)
+    path_product = os.path.join(path, str(product_id))
+    if not os.path.isdir(path_product):
+        os.mkdir(path_product)
     for image in images:
         sys.stderr.write('%s: ' % image.src)
         if not is_png(image.src):
@@ -68,18 +75,19 @@ def convert_images_for_product(product):
             raise Exception('Error getting %s' % image.src)
         filename_png = os.path.basename(r.links['canonical']['url'])
         filename_jpg = os.path.splitext(filename_png)[0]+'.jpg'
+        path_png = os.path.join(path_product, filename_png)
+        path_jpg = os.path.join(path_product, filename_jpg)
+        path_json = os.path.join(path_product, str(image.id)+'.json')
 
         # stash the original content, just for safety
-        with open(os.path.join(str(product_id), str(image.id))+'.json', 'w') as f:
+        with open(path_json, 'w') as f:
                 sys.stderr.write('    saving JSON\n')
                 f.write(image.to_json())
-        with open(os.path.join(str(product_id), filename_png), 'w') as f:
+        with open(path_png, 'w') as f:
                 sys.stderr.write('    saving PNG\n')
                 f.write(r.content)
 
         # create new image file
-        path_png = os.path.join(str(product_id), filename_png)
-        path_jpg = os.path.join(str(product_id), filename_jpg)
         cmd = ['convert', path_png, '-quality', '85%', path_jpg]
         sys.stderr.write('    executing: %s ... ' % ' '.join(cmd))
         output = subprocess.check_output(cmd)
@@ -123,9 +131,10 @@ def convert_images_for_product(product):
 def main(args):
     auth()
     products = get_products()
+    products.reverse()
     for product in products:
         sys.stderr.write('>>> Product %d:\n' % product.id)
-        convert_images_for_product(product)
+        convert_images_for_product(product, CONFIG_MAIN['store'])
 
 if __name__ == "__main__":
     main(sys.argv)

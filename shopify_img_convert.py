@@ -25,6 +25,7 @@ CONFIG.read('shopify_img_convert.ini')
 CONFIG_MAIN = dict(CONFIG.items('main'))
 
 def auth(store=None, api_key=None, password=None):
+    """Set authentication details for shopify."""
     store = store or CONFIG_MAIN['store']
     api_key = api_key or CONFIG_MAIN['api_key']
     password = password or CONFIG_MAIN['password']
@@ -44,6 +45,7 @@ def get_products():
     return products
 
 def is_png(url):
+    """Does the given URL point to a PNG file?"""
     return requests.head(url).headers['content-type'] == 'image/png'
 
 def convert_images_for_product(product, path=".", quiet=False):
@@ -112,8 +114,6 @@ def convert_images_for_product(product, path=".", quiet=False):
         # The safer way looks to be to create a new image object and add that
         # to the product's list of images, keeping the position value the same.
         #
-        # The un-safe way:
-        #
         # image.attach_image(data=jpg_data, filename=os.path.basename(path_jpg))
         # image.save()
 
@@ -137,6 +137,11 @@ def convert_images_for_product(product, path=".", quiet=False):
     product.save()
 
 def convert_all_products(quiet=False, path=None):
+    """Convert all PNG images for all products in JPGs.
+
+    quiet: should status information be written to standard error? (False by default)
+    path: subdirectory to use for stash of original data ("." by default)
+    """
     products = get_products()
     for product in products:
         if not quiet:

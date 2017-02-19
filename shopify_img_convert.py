@@ -46,7 +46,7 @@ def get_products():
 def is_png(url):
     return requests.head(url).headers['content-type'] == 'image/png'
 
-def convert_images_for_product(product, path="."):
+def convert_images_for_product(product, path=".", quiet=False):
     """Given a product object or id number, convert all PNGs into JPGs."""
     # A product object was given
     try:
@@ -65,11 +65,14 @@ def convert_images_for_product(product, path="."):
     if not os.path.isdir(path_product):
         os.mkdir(path_product)
     for image in images:
-        sys.stderr.write('%s: ' % image.src)
+        if not quiet:
+            sys.stderr.write('%s: ' % image.src)
         if not is_png(image.src):
-            sys.stderr.write('not a PNG, skipping.\n')
+            if not quiet:
+                sys.stderr.write('not a PNG, skipping.\n')
             continue
-        sys.stderr.write('converting...\n')
+        if not quiet:
+            sys.stderr.write('converting...\n')
         r = requests.get(image.src)
         if not r.status_code == 200:
             raise Exception('Error getting %s' % image.src)
@@ -81,17 +84,21 @@ def convert_images_for_product(product, path="."):
 
         # stash the original content, just for safety
         with open(path_json, 'w') as f:
+            if not quiet:
                 sys.stderr.write('    saving JSON\n')
-                f.write(image.to_json())
+            f.write(image.to_json())
         with open(path_png, 'w') as f:
+            if not quiet:
                 sys.stderr.write('    saving PNG\n')
-                f.write(r.content)
+            f.write(r.content)
 
         # create new image file
         cmd = ['convert', path_png, '-quality', '85%', path_jpg]
-        sys.stderr.write('    executing: %s ... ' % ' '.join(cmd))
+        if not quiet:
+            sys.stderr.write('    executing: %s ... ' % ' '.join(cmd))
         output = subprocess.check_output(cmd)
-        sys.stderr.write('%s\n' % output)
+        if not quiet:
+            sys.stderr.write('%s\n' % output)
 
         # read in the new image data and attach to image object
 
@@ -121,20 +128,25 @@ def convert_images_for_product(product, path="."):
         image_new = shopify.Image(attributes=attrs)
         image_new.attach_image(data=jpg_data, filename=os.path.basename(path_jpg))
         pos = attrs['position'] - 1
-        sys.stderr.write('    replacing image object %d\n' % product.images[pos].id)
+        if not quiet:
+            sys.stderr.write('    replacing image object %d\n' % product.images[pos].id)
         del product.images[pos]
         product.images.insert(pos, image_new)
 
     # Apparently save() is what actually sends the updated data to the server.
     product.save()
 
+def convert_all_products(quiet=False, path=None):
+    products = get_products()
+    for product in products:
+        if not quiet:
+            sys.stderr.write('>>> Product %d:\n' % product.id)
+        path = path or CONFIG_MAIN['store']
+        convert_images_for_product(product, path, quiet)
+
 def main(args):
     auth()
-    products = get_products()
-    products.reverse()
-    for product in products:
-        sys.stderr.write('>>> Product %d:\n' % product.id)
-        convert_images_for_product(product, CONFIG_MAIN['store'])
+    convert_all_products()
 
 if __name__ == "__main__":
     main(sys.argv)

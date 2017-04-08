@@ -95,7 +95,7 @@ def convert_images_for_product(product, path=".", quiet=False):
             f.write(r.content)
 
         # create new image file
-        cmd = ['convert', path_png, '-quality', '85%', path_jpg]
+        cmd = ['convert', path_png, '-quality', '90%', path_jpg]
         if not quiet:
             sys.stderr.write('    executing: %s ... ' % ' '.join(cmd))
         output = subprocess.check_output(cmd)
@@ -127,6 +127,10 @@ def convert_images_for_product(product, path=".", quiet=False):
         del attrs['src']
         image_new = shopify.Image(attributes=attrs)
         image_new.attach_image(data=jpg_data, filename=os.path.basename(path_jpg))
+        # TODO: reading image position from the object's attribute is not
+        # reliable; I just saw a case with four images where the positions were
+        # 1,2,4,4.  Maybe instead just redo this whole mess to loop over index
+        # values instead.
         pos = attrs['position'] - 1
         if not quiet:
             sys.stderr.write('    replacing image object %d\n' % product.images[pos].id)
@@ -143,10 +147,10 @@ def convert_all_products(quiet=False, path=None):
     path: subdirectory to use for stash of original data ("." by default)
     """
     products = get_products()
+    path = path or CONFIG_MAIN['store']
     for product in products:
         if not quiet:
             sys.stderr.write('>>> Product %d:\n' % product.id)
-        path = path or CONFIG_MAIN['store']
         convert_images_for_product(product, path, quiet)
 
 def main(args):
